@@ -173,17 +173,17 @@
         
         console.log("Sending initial request with messages:", JSON.stringify(messages));
         
-        fetch(config.endpoint, {
+        // Use the proxy endpoint instead of direct API call
+        fetch('/api/proxy', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.apiKey}`
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             model: config.model,
             messages: messages,
             temperature: 0.7,
-            max_tokens: 150,
+            max_tokens: 1000,
             provider: { sort: "throughput" }
           })
         })
@@ -296,11 +296,11 @@
 
         console.log(`Sending request for LLM ${agent} with messages:`, JSON.stringify(messages));
 
-        fetch(config.endpoint, {
+        // Use the proxy endpoint instead of direct API call
+        fetch('/api/proxy', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.apiKey}`
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             model: config.model,
