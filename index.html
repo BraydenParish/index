@@ -70,12 +70,12 @@
         A: {
           model: "openai/gpt-3.5-turbo",
           apiKey: "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",
-          endpoint: "https://api.openrouter.ai/v1/chat/completions"
+          endpoint: "https://openrouter.ai/api/v1/chat/completions"
         },
         B: {
           model: "anthropic/claude-2",
           apiKey: "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",
-          endpoint: "https://api.openrouter.ai/v1/chat/completions"
+          endpoint: "https://openrouter.ai/api/v1/chat/completions"
         }
       };
 
@@ -85,14 +85,13 @@
         apiStatusDiv.innerHTML = "Testing API connection...";
         
         // Test with a simple request
-        fetch("https://api.openrouter.ai/v1/chat/completions", {
+        fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${agentsConfig.A.apiKey}`,
-            "HTTP-Referer": `${window.location.href}`,
-            "X-Title": "LLM Debate App",
-            "Origin": "null"
+            "HTTP-Referer": window.location.origin,
+            "X-Title": "LLM Debate App"
           },
           body: JSON.stringify({
             model: "openai/gpt-3.5-turbo",
@@ -120,7 +119,7 @@
         })
         .catch(error => {
           console.error("Error details:", error);
-          apiStatusDiv.innerHTML = `<strong>API Connection Failed:</strong><br>${error.message}<br><br>Please check the browser console for more details.`;
+          apiStatusDiv.innerHTML = `<strong>API Connection Failed:</strong><br>${error.message}<br><br>Please check:<br>1. Your internet connection<br>2. If openrouter.ai is accessible<br>3. If your API key is valid<br><br>Console error: ${error.toString()}`;
         });
       });
       
@@ -218,9 +217,8 @@
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${config.apiKey}`,
-            "HTTP-Referer": `${window.location.href}`,
-            "X-Title": "LLM Debate App",
-            "Origin": "null"
+            "HTTP-Referer": window.location.origin,
+            "X-Title": "LLM Debate App"
           },
           body: JSON.stringify({
             model: config.model,
@@ -250,7 +248,7 @@
         })
         .catch(error => {
           console.error("Error calling LLM API:", error);
-          callback(`Error generating response from LLM ${agent}. Please try again.`);
+          callback(`Error generating response from LLM ${agent}. Error: ${error.message}`);
         });
       }
     </script>
