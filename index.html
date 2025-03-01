@@ -84,14 +84,11 @@
         apiStatusDiv.style.display = "block";
         apiStatusDiv.innerHTML = "Testing API connection...";
         
-        // Test with a simple request
-        fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
+        // Test with a simple request through proxy
+        fetch('/api/proxy', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${agentsConfig.A.apiKey}`,
-            "Referer": window.location.origin,
-            "X-Title": "LLM Debate App"
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             model: "openai/gpt-3.5-turbo",
@@ -119,7 +116,7 @@
         })
         .catch(error => {
           console.error("Error details:", error);
-          apiStatusDiv.innerHTML = `<strong>API Connection Failed:</strong><br>${error.message}<br><br>Please check:<br>1. Your internet connection<br>2. If openrouter.ai is accessible<br>3. If your API key is valid<br><br>Console error: ${error.toString()}`;
+          apiStatusDiv.innerHTML = `<strong>API Connection Failed:</strong><br>${error.message}<br><br>Please check:<br>1. Your internet connection<br>2. If the proxy server is running<br>3. If the API key is valid<br><br>Console error: ${error.toString()}`;
         });
       });
       
@@ -171,7 +168,7 @@
         }
       }
       
-      // LLM Response Function using OpenRouter API
+      // LLM Response Function using Proxy
       function generateResponse(agent, conversation, callback) {
         const config = agentsConfig[agent];
         
@@ -209,16 +206,13 @@
           });
         }
 
-        console.log("Sending request to OpenRouter with messages:", JSON.stringify(messages));
+        console.log("Sending request to proxy with messages:", JSON.stringify(messages));
 
-        // Make API request to OpenRouter
-        fetch(config.endpoint, {
-          method: "POST",
+        // Make API request through proxy
+        fetch('/api/proxy', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${config.apiKey}`,
-            "HTTP-Referer": window.location.origin,
-            "X-Title": "LLM Debate App"
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             model: config.model,
