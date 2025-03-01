@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>LLM Fight</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding: 20px;
+      }
+      .output {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 10px;
+        height: 150px;
+        width: 45%;
+        overflow-y: auto;
+        text-align: left;
+      }
+      .container {
+        display: flex;
+        justify-content: center;
+        gap: 5%;
+      }
+      .input-container {
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LLM Fight</h1>
+    <div class="input-container">
+      <input id="topicInput" type="text" placeholder="Enter debate topic here" style="width:50%; padding:8px;">
+      <button id="startDebate" style="padding:8px;">Start Debate</button>
+      <button id="testAPI" style="padding:8px; margin-left:10px;">Test API Connection</button>
+    </div>
+    <div class="container">
+      <div id="llmA" class="output">
+        <strong>LLM A:</strong><br>
+      </div>
+      <div id="llmB" class="output">
+        <strong>LLM B:</strong><br>
+      </div>
+    </div>
+    <div style="margin-top:20px;">
+      <button id="nextTurn" style="padding:10px 20px;" disabled>Next Turn</button>
+    </div>
+    <div id="apiStatus" style="margin-top:10px; padding:10px; border:1px solid #ccc; display:none;"></div>
+    
+    <script>
+      // State Variables
+      let debateTopic = "";
+      let turn = 0; // 0 for LLM A's turn, 1 for LLM B's turn
+      let conversation = {
+        llmA: `Topic: `,
+        llmB: `Topic: `
+      };
+      
+      const topicInput = document.getElementById("topicInput");
+      const startButton = document.getElementById("startDebate");
+      const nextTurnButton = document.getElementById("nextTurn");
+      const testAPIButton = document.getElementById("testAPI");
+      const apiStatusDiv = document.getElementById("apiStatus");
+      const llmADiv = document.getElementById("llmA");
+      const llmBDiv = document.getElementById("llmB");
+      
+      // Configuration for the LLM agents
+      const agentsConfig = {
+        A: {
+          model: "openai/gpt-3.5-turbo",
+          apiKey: "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",
+          endpoint: "https://api.openrouter.ai/v1/chat/completions"
+        },
+        B: {
+          model: "anthropic/claude-2",
+          apiKey: "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",
+          endpoint: "https://api.openrouter.ai/v1/chat/completions"
+        }
+      };
+
+      // Test API Connection
+      testAPIButton.addEventListener("click", () => {
+        apiStatusDiv.style.display = "block";
+        apiStatusDiv.innerHTML = "Testing API connection...";
+        
+        // Test with a simple request
+        fetch("https://api.openrouter.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${agentsConfig.A.apiKey}`,
+            "HTTP-Referer": `${window.location.href}`,
+            "X-Title": "LLM Debate App",
+            "Origin": "null"
+          },
+          body: JSON.stringify({
+            model: "openai/gpt-3.5-turbo",
+            messages: [
+              {
+                role: "user",
+                content: "Say 'API test successful' if you can read this message."
+              }
+            ]
+          })
+        })
+        .then(response => {
+          console.log("API Response status:", response.status);
+          if (!response.ok) {
+            return response.text().then(text => {
+              console.error("API Error Response:", text);
+              throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+            });
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log("API Response data:", data);
+          apiStatusDiv.innerHTML = `<strong>API Connection Successful!</strong><br>Response: ${data.choices[0].message.content}`;
+        })
+        .catch(error => {
+          console.error("Error details:", error);
+          apiStatusDiv.innerHTML = `<strong>API Connection Failed:</strong><br>${error.message}<br><br>Please check the browser console for more details.`;
+        });
+      });
+      
+      // Start Debate – initialize conversation with topic.
+      startButton.addEventListener("click", () => {
+        debateTopic = topicInput.value.trim();
+        if (!debateTopic) {
+          alert("Please enter a debate topic.");
+          return;
+        }
+        // Reset the outputs.
+        llmADiv.innerHTML = "<strong>LLM A:</strong><br>";
+        llmBDiv.innerHTML = "<strong>LLM B:</strong><br>";
+        conversation = {
+          llmA: `Topic: ${debateTopic}\n`,
+          llmB: `Topic: ${debateTopic}\n`
+        };
+        turn = 0;  // Begin with LLM A.
+        nextTurnButton.disabled = false;
+        // Optionally trigger an initial statement by LLM A.
+        addResponse("llmA", `Let's debate on: ${debateTopic}`);
+      });
+      
+      // On each button click, alternate between LLM A and LLM B responses.
+      nextTurnButton.addEventListener("click", () => {
+        if (turn === 0) {
+          generateResponse("A", conversation, (response) => {
+            conversation.llmA += "\nA: " + response;
+            addResponse("llmA", response);
+            turn = 1;
+          });
+        } else {
+          generateResponse("B", conversation, (response) => {
+            conversation.llmB += "\nB: " + response;
+            addResponse("llmB", response);
+            turn = 0;
+          });
+        }
+      });
+      
+      // Helper function to append responses to the correct output window.
+      function addResponse(agent, response) {
+        if (agent === "llmA") {
+          llmADiv.innerHTML += "<br>" + response;
+          llmADiv.scrollTop = llmADiv.scrollHeight;
+        } else {
+          llmBDiv.innerHTML += "<br>" + response;
+          llmBDiv.scrollTop = llmBDiv.scrollHeight;
+        }
+      }
+      
+      // LLM Response Function using OpenRouter API
+      function generateResponse(agent, conversation, callback) {
+        const config = agentsConfig[agent];
+        
+        // Format conversation history
+        const messages = [];
+        
+        // Add system message
+        messages.push({
+          role: "system",
+          content: `You are participating in a debate. ${
+            agent === "A" ? 
+            "Present your argument on the given topic in 2-3 sentences." : 
+            "Respond to the previous argument with a counterargument in 2-3 sentences."
+          }`
+        });
+
+        // Add topic as user message
+        messages.push({
+          role: "user",
+          content: `The debate topic is: ${debateTopic}`
+        });
+
+        // Add previous messages if they exist
+        if (agent === "A" && conversation.llmB && conversation.llmB.includes("\nB: ")) {
+          const previousResponse = conversation.llmB.split("\nB: ")[1];
+          messages.push({
+            role: "user",
+            content: `Previous argument: ${previousResponse}`
+          });
+        } else if (agent === "B" && conversation.llmA && conversation.llmA.includes("\nA: ")) {
+          const previousResponse = conversation.llmA.split("\nA: ")[1];
+          messages.push({
+            role: "user",
+            content: `Previous argument: ${previousResponse}`
+          });
+        }
+
+        console.log("Sending request to OpenRouter with messages:", JSON.stringify(messages));
+
+        // Make API request to OpenRouter
+        fetch(config.endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${config.apiKey}`,
+            "HTTP-Referer": `${window.location.href}`,
+            "X-Title": "LLM Debate App",
+            "Origin": "null"
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 150
+          })
+        })
+        .then(response => {
+          console.log("API Response status:", response.status);
+          if (!response.ok) {
+            return response.text().then(text => {
+              console.error("API Error Response:", text);
+              throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+            });
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log("API Response data:", data);
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            const generatedResponse = data.choices[0].message.content;
+            callback(generatedResponse);
+          } else {
+            throw new Error('Unexpected API response format: ' + JSON.stringify(data));
+          }
+        })
+        .catch(error => {
+          console.error("Error calling LLM API:", error);
+          callback(`Error generating response from LLM ${agent}. Please try again.`);
+        });
+      }
+    </script>
+  </body>
+</html>
