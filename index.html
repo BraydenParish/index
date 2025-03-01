@@ -213,17 +213,16 @@
         // Show loading indicator in the appropriate div
         const currentDiv = turn === 0 ? llmADiv : llmBDiv;
         const currentAgent = turn === 0 ? "llmA" : "llmB";
+        
+        // Store the current content before adding loading indicator
+        const originalContent = currentDiv.innerHTML;
         currentDiv.innerHTML += "<br>Generating response...";
         
         if (turn === 0) {
           // LLM A's turn - respond to LLM B's last argument
           generateResponse("A", (response) => {
-            // Clear loading indicator
-            llmADiv.innerHTML = "<strong>LLM A:</strong><br>";
-            // Re-display all previous responses
-            conversation.llmA.forEach(resp => {
-              addResponse("llmA", resp);
-            });
+            // Restore original content without loading indicator
+            currentDiv.innerHTML = originalContent;
             
             // Add and store new response
             conversation.llmA.push(response);
@@ -234,12 +233,8 @@
         } else {
           // LLM B's turn - respond to LLM A's last argument
           generateResponse("B", (response) => {
-            // Clear loading indicator
-            llmBDiv.innerHTML = "<strong>LLM B:</strong><br>";
-            // Re-display all previous responses
-            conversation.llmB.forEach(resp => {
-              addResponse("llmB", resp);
-            });
+            // Restore original content without loading indicator
+            currentDiv.innerHTML = originalContent;
             
             // Add and store new response
             conversation.llmB.push(response);
