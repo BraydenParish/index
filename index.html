@@ -213,10 +213,11 @@
         // Show loading indicator in the appropriate div
         const currentDiv = turn === 0 ? llmADiv : llmBDiv;
         const currentAgent = turn === 0 ? "llmA" : "llmB";
+        const loadingMessage = "<br>Generating response...";
         
         // Store the current content before adding loading indicator
         const originalContent = currentDiv.innerHTML;
-        currentDiv.innerHTML += "<br>Generating response...";
+        currentDiv.innerHTML += loadingMessage;
         
         if (turn === 0) {
           // LLM A's turn - respond to LLM B's last argument
@@ -297,42 +298,37 @@
 
         console.log(`Sending request for LLM ${agent} with messages:`, JSON.stringify(messages));
 
-        async function attemptRequest(attempt) {
-          try {
-            const response = await fetch('/api/proxy', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: config.model,
-                messages: messages,
-                temperature: 0.7,
-                max_tokens: 150,
-                provider: { sort: "throughput" }
-              })
-            });
-            
-            if (!response.ok) {
-              const text = await response.text();
+        fetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: config.model,
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 150,
+            provider: { sort: "throughput" }
+          })
+        })
+        .then(response => {
+          if (!response.ok) {
+            return response.text().then(text => {
               throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
-            }
-            
-            const data = await response.json();
-            if (data.choices && data.choices[0] && data.choices[0].message) {
-              callback(data.choices[0].message.content);
-            } else {
-              throw new Error('Unexpected API response format');
-            }
-          } catch (error) {
-            console.error(`Attempt ${attempt} failed: ${error.message}`);
-            if (attempt < retries) {
-              setTimeout(() => attemptRequest(attempt + 1), 2000 * attempt); // Exponential backoff
-            } else {
-              callback(`Error generating response from LLM ${agent} after ${retries} attempts: ${error.message}`);
-            }
+            });
           }
-        }
-
-        attemptRequest(1); // Start with first attempt
+          return response.json();
+        })
+        .then(data => {
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            callback(data.choices[0].message.content);
+          } else {
+            throw new Error('Unexpected API response format');
+          }
+        })
+        .catch(error => {
+          console.error(`Error generating response from LLM ${agent}:`, error);
+          // Still call the callback with an error message so UI updates
+          callback(`Error generating response: ${error.message}. Please try again.`);
+        });
       }
     </script>
   </body>
