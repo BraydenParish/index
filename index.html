@@ -168,82 +168,68 @@
         }
       }
       
-      // LLM Response Function using Proxy
-      function generateResponse(agent, conversation, callback) {
+      // LLM Response Function using Proxy with retries
+      function generateResponse(agent, conversation, callback, retries = 3) {
         const config = agentsConfig[agent];
         
         // Format conversation history
-        const messages = [];
-        
-        // Add system message
-        messages.push({
-          role: "system",
-          content: `You are participating in a debate. ${
-            agent === "A" ? 
-            "Present your argument on the given topic in 2-3 sentences." : 
-            "Respond to the previous argument with a counterargument in 2-3 sentences."
-          }`
-        });
-
-        // Add topic as user message
-        messages.push({
-          role: "user",
-          content: `The debate topic is: ${debateTopic}`
-        });
+        const messages = [
+          {
+            role: "system",
+            content: `You are participating in a debate. ${
+              agent === "A" ? 
+              "Present your argument on the given topic in 2-3 sentences." : 
+              "Respond to the previous argument with a counterargument in 2-3 sentences."
+            }`
+          },
+          { role: "user", content: `The debate topic is: ${debateTopic}` }
+        ];
 
         // Add previous messages if they exist
         if (agent === "A" && conversation.llmB && conversation.llmB.includes("\nB: ")) {
-          const previousResponse = conversation.llmB.split("\nB: ")[1];
-          messages.push({
-            role: "user",
-            content: `Previous argument: ${previousResponse}`
-          });
+          messages.push({ role: "user", content: `Previous argument: ${conversation.llmB.split("\nB: ")[1]}` });
         } else if (agent === "B" && conversation.llmA && conversation.llmA.includes("\nA: ")) {
-          const previousResponse = conversation.llmA.split("\nA: ")[1];
-          messages.push({
-            role: "user",
-            content: `Previous argument: ${previousResponse}`
-          });
+          messages.push({ role: "user", content: `Previous argument: ${conversation.llmA.split("\nA: ")[1]}` });
         }
 
         console.log("Sending request to proxy with messages:", JSON.stringify(messages));
 
-        // Make API request through proxy
-        fetch('/api/proxy', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: config.model,
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 150
-          })
-        })
-        .then(response => {
-          console.log("API Response status:", response.status);
-          if (!response.ok) {
-            return response.text().then(text => {
-              console.error("API Error Response:", text);
-              throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+        async function attemptRequest(attempt) {
+          try {
+            const response = await fetch('/api/proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: config.model,
+                messages: messages,
+                temperature: 0.7,
+                max_tokens: 150,
+                provider: { sort: "throughput" } // Prioritize responsive providers
+              })
             });
+            
+            if (!response.ok) {
+              const text = await response.text();
+              throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+            }
+            
+            const data = await response.json();
+            if (data.choices && data.choices[0] && data.choices[0].message) {
+              callback(data.choices[0].message.content);
+            } else {
+              throw new Error('Unexpected API response format');
+            }
+          } catch (error) {
+            console.error(`Attempt ${attempt} failed: ${error.message}`);
+            if (attempt < retries) {
+              setTimeout(() => attemptRequest(attempt + 1), 2000 * attempt); // Exponential backoff
+            } else {
+              callback(`Error generating response from LLM ${agent} after ${retries} attempts: ${error.message}`);
+            }
           }
-          return response.json();
-        })
-        .then(data => {
-          console.log("API Response data:", data);
-          if (data.choices && data.choices[0] && data.choices[0].message) {
-            const generatedResponse = data.choices[0].message.content;
-            callback(generatedResponse);
-          } else {
-            throw new Error('Unexpected API response format: ' + JSON.stringify(data));
-          }
-        })
-        .catch(error => {
-          console.error("Error calling LLM API:", error);
-          callback(`Error generating response from LLM ${agent}. Error: ${error.message}`);
-        });
+        }
+
+        attemptRequest(1); // Start with first attempt
       }
     </script>
   </body>
