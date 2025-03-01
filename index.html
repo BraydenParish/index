@@ -53,8 +53,8 @@
       let debateTopic = "";
       let turn = 0; // 0 for LLM A's turn, 1 for LLM B's turn
       let conversation = {
-        llmA: `Topic: `,
-        llmB: `Topic: `
+        llmA: [],
+        llmB: []
       };
       
       const topicInput = document.getElementById("topicInput");
@@ -120,39 +120,132 @@
         });
       });
       
-      // Start Debate – initialize conversation with topic.
+      // Start Debate – initialize conversation with topic and get first response from LLM A
       startButton.addEventListener("click", () => {
         debateTopic = topicInput.value.trim();
         if (!debateTopic) {
           alert("Please enter a debate topic.");
           return;
         }
-        // Reset the outputs.
+        
+        // Reset the outputs and conversation
         llmADiv.innerHTML = "<strong>LLM A:</strong><br>";
         llmBDiv.innerHTML = "<strong>LLM B:</strong><br>";
         conversation = {
-          llmA: `Topic: ${debateTopic}\n`,
-          llmB: `Topic: ${debateTopic}\n`
+          llmA: [],
+          llmB: []
         };
-        turn = 0;  // Begin with LLM A.
-        nextTurnButton.disabled = false;
-        // Optionally trigger an initial statement by LLM A.
-        addResponse("llmA", `Let's debate on: ${debateTopic}`);
+        
+        // Disable buttons during initial generation
+        startButton.disabled = true;
+        nextTurnButton.disabled = true;
+        
+        // Show loading indicator
+        llmADiv.innerHTML += "<br>Generating initial argument...";
+        
+        // Generate the first response from LLM A (arguing FOR the topic)
+        generateInitialResponse("A", (response) => {
+          // Clear loading indicator
+          llmADiv.innerHTML = "<strong>LLM A:</strong><br>";
+          
+          // Store and display the response
+          conversation.llmA.push(response);
+          addResponse("llmA", response);
+          
+          // Set up for LLM B's turn next
+          turn = 1;
+          nextTurnButton.disabled = false;
+          startButton.disabled = false;
+        });
       });
+      
+      // Generate initial response from LLM A (arguing FOR the topic)
+      function generateInitialResponse(agent, callback) {
+        const config = agentsConfig[agent];
+        
+        const messages = [
+          {
+            role: "system",
+            content: "You are participating in a debate. You will argue FOR the given topic, presenting a strong case in favor of it. Provide 2-3 sentences with your best arguments supporting the position."
+          },
+          { role: "user", content: `The debate topic is: ${debateTopic}` }
+        ];
+        
+        console.log("Sending initial request with messages:", JSON.stringify(messages));
+        
+        fetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: config.model,
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 150,
+            provider: { sort: "throughput" }
+          })
+        })
+        .then(response => {
+          if (!response.ok) {
+            return response.text().then(text => {
+              throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+            });
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            callback(data.choices[0].message.content);
+          } else {
+            throw new Error('Unexpected API response format');
+          }
+        })
+        .catch(error => {
+          console.error("Error generating initial response:", error);
+          callback(`Error generating initial argument: ${error.message}`);
+        });
+      }
       
       // On each button click, alternate between LLM A and LLM B responses.
       nextTurnButton.addEventListener("click", () => {
+        // Disable button during generation
+        nextTurnButton.disabled = true;
+        
+        // Show loading indicator in the appropriate div
+        const currentDiv = turn === 0 ? llmADiv : llmBDiv;
+        const currentAgent = turn === 0 ? "llmA" : "llmB";
+        currentDiv.innerHTML += "<br>Generating response...";
+        
         if (turn === 0) {
-          generateResponse("A", conversation, (response) => {
-            conversation.llmA += "\nA: " + response;
+          // LLM A's turn - respond to LLM B's last argument
+          generateResponse("A", (response) => {
+            // Clear loading indicator
+            llmADiv.innerHTML = "<strong>LLM A:</strong><br>";
+            // Re-display all previous responses
+            conversation.llmA.forEach(resp => {
+              addResponse("llmA", resp);
+            });
+            
+            // Add and store new response
+            conversation.llmA.push(response);
             addResponse("llmA", response);
             turn = 1;
+            nextTurnButton.disabled = false;
           });
         } else {
-          generateResponse("B", conversation, (response) => {
-            conversation.llmB += "\nB: " + response;
+          // LLM B's turn - respond to LLM A's last argument
+          generateResponse("B", (response) => {
+            // Clear loading indicator
+            llmBDiv.innerHTML = "<strong>LLM B:</strong><br>";
+            // Re-display all previous responses
+            conversation.llmB.forEach(resp => {
+              addResponse("llmB", resp);
+            });
+            
+            // Add and store new response
+            conversation.llmB.push(response);
             addResponse("llmB", response);
             turn = 0;
+            nextTurnButton.disabled = false;
           });
         }
       });
@@ -169,30 +262,45 @@
       }
       
       // LLM Response Function using Proxy with retries
-      function generateResponse(agent, conversation, callback, retries = 3) {
+      function generateResponse(agent, callback, retries = 3) {
         const config = agentsConfig[agent];
         
         // Format conversation history
-        const messages = [
+        let messages = [
           {
             role: "system",
-            content: `You are participating in a debate. ${
-              agent === "A" ? 
-              "Present your argument on the given topic in 2-3 sentences." : 
-              "Respond to the previous argument with a counterargument in 2-3 sentences."
-            }`
+            content: agent === "A" 
+              ? "You are participating in a debate. You are arguing FOR the given topic. Respond to the opponent's previous argument with a strong counterargument in 2-3 sentences."
+              : "You are participating in a debate. You are arguing AGAINST the given topic. Respond to the opponent's previous argument with a strong counterargument in 2-3 sentences."
           },
           { role: "user", content: `The debate topic is: ${debateTopic}` }
         ];
 
-        // Add previous messages if they exist
-        if (agent === "A" && conversation.llmB && conversation.llmB.includes("\nB: ")) {
-          messages.push({ role: "user", content: `Previous argument: ${conversation.llmB.split("\nB: ")[1]}` });
-        } else if (agent === "B" && conversation.llmA && conversation.llmA.includes("\nA: ")) {
-          messages.push({ role: "user", content: `Previous argument: ${conversation.llmA.split("\nA: ")[1]}` });
+        // Add conversation history
+        if (agent === "A" && conversation.llmB.length > 0) {
+          // Add LLM A's last argument (if any)
+          if (conversation.llmA.length > 0) {
+            messages.push({ 
+              role: "assistant", 
+              content: conversation.llmA[conversation.llmA.length - 1] 
+            });
+          }
+          
+          // Add LLM B's response to respond to
+          messages.push({ 
+            role: "user", 
+            content: `Opponent's argument: ${conversation.llmB[conversation.llmB.length - 1]}` 
+          });
+        } 
+        else if (agent === "B" && conversation.llmA.length > 0) {
+          // Add LLM A's argument to respond to
+          messages.push({ 
+            role: "user", 
+            content: `Opponent's argument: ${conversation.llmA[conversation.llmA.length - 1]}` 
+          });
         }
 
-        console.log("Sending request to proxy with messages:", JSON.stringify(messages));
+        console.log(`Sending request for LLM ${agent} with messages:`, JSON.stringify(messages));
 
         async function attemptRequest(attempt) {
           try {
@@ -204,7 +312,7 @@
                 messages: messages,
                 temperature: 0.7,
                 max_tokens: 150,
-                provider: { sort: "throughput" } // Prioritize responsive providers
+                provider: { sort: "throughput" }
               })
             });
             
