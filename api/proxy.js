@@ -9,7 +9,7 @@ module.exports = async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`
+        'Authorization': `Bearer ${process.env.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}`
       },
       body: JSON.stringify(req.body)
     });
