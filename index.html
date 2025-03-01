@@ -140,7 +140,7 @@
         startButton.disabled = true;
         nextTurnButton.disabled = true;
         
-        // Show loading indicator
+        // Show loading indicator in LLM A's output
         llmADiv.innerHTML += "<br>Generating initial argument...";
         
         // Generate the first response from LLM A (arguing FOR the topic)
@@ -173,9 +173,12 @@
         
         console.log("Sending initial request with messages:", JSON.stringify(messages));
         
-        fetch('/api/proxy', {
+        fetch(config.endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`
+          },
           body: JSON.stringify({
             model: config.model,
             messages: messages,
@@ -212,7 +215,6 @@
         
         // Show loading indicator in the appropriate div
         const currentDiv = turn === 0 ? llmADiv : llmBDiv;
-        const currentAgent = turn === 0 ? "llmA" : "llmB";
         const loadingMessage = "<br>Generating response...";
         
         // Store the current content before adding loading indicator
@@ -257,7 +259,7 @@
         }
       }
       
-      // LLM Response Function using Proxy with retries
+      // LLM Response Function using endpoint from the agent config with retries
       function generateResponse(agent, callback, retries = 3) {
         const config = agentsConfig[agent];
         
@@ -274,22 +276,18 @@
 
         // Add conversation history
         if (agent === "A" && conversation.llmB.length > 0) {
-          // Add LLM A's last argument (if any)
           if (conversation.llmA.length > 0) {
             messages.push({ 
               role: "assistant", 
               content: conversation.llmA[conversation.llmA.length - 1] 
             });
           }
-          
-          // Add LLM B's response to respond to
           messages.push({ 
             role: "user", 
             content: `Opponent's argument: ${conversation.llmB[conversation.llmB.length - 1]}` 
           });
         } 
         else if (agent === "B" && conversation.llmA.length > 0) {
-          // Add LLM A's argument to respond to
           messages.push({ 
             role: "user", 
             content: `Opponent's argument: ${conversation.llmA[conversation.llmA.length - 1]}` 
@@ -298,9 +296,12 @@
 
         console.log(`Sending request for LLM ${agent} with messages:`, JSON.stringify(messages));
 
-        fetch('/api/proxy', {
+        fetch(config.endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`
+          },
           body: JSON.stringify({
             model: config.model,
             messages: messages,
@@ -326,7 +327,6 @@
         })
         .catch(error => {
           console.error(`Error generating response from LLM ${agent}:`, error);
-          // Still call the callback with an error message so UI updates
           callback(`Error generating response: ${error.message}. Please try again.`);
         });
       }
