@@ -90,7 +90,7 @@
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${agentsConfig.A.apiKey}`,
-            "HTTP-Referer": window.location.origin,
+            "Referer": window.location.origin,
             "X-Title": "LLM Debate App"
           },
           body: JSON.stringify({
